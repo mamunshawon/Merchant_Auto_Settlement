@@ -16,15 +16,29 @@ class FTPClient:
     def connect(self):
         """Establish FTP connection"""
         try:
+            logger.info(f"Attempting FTP connection to {self.host}:{self.port}")
             self.ftp = FTP()
-            self.ftp.connect(self.host, self.port, timeout=30)
-            if self.username and self.password:
-                self.ftp.login(self.username, self.password)
-            else:
-                self.ftp.login()
+            self.ftp.set_debuglevel(2)  # Enable debug output
+            
+            logger.info(f"Connecting to {self.host}:{self.port} with timeout 60 seconds")
+            self.ftp.connect(self.host, self.port, timeout=60)
+            
             logger.info(f"Connected to FTP server {self.host}:{self.port}")
+            logger.info(f"FTP response: {self.ftp.welcome}")
+            
+            if self.username and self.password:
+                logger.info(f"Logging in as {self.username}")
+                response = self.ftp.login(self.username, self.password)
+                logger.info(f"Login response: {response}")
+            else:
+                logger.info("Attempting anonymous login")
+                response = self.ftp.login()
+                logger.info(f"Anonymous login response: {response}")
+                
+            logger.info(f"Successfully authenticated to FTP server {self.host}:{self.port}")
         except Exception as e:
             logger.error(f"FTP connection failed: {e}")
+            logger.error(f"Host: {self.host}, Port: {self.port}, Username: {self.username}")
             raise
 
     def disconnect(self):
