@@ -5,3 +5,5 @@ urllib3~=2.6.3
 selenium~=4.40.0
 openpyxl
 pandas
+paramiko
+pysftp

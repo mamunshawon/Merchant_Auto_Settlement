@@ -1,78 +1,85 @@
-from ftplib import FTP
+import pysftp
 from datetime import datetime
 from utils.logger import get_logger
 
-logger = get_logger("FTP_CLIENT")
+logger = get_logger("SFTP_CLIENT")
 
 
 class FTPClient:
+    """SFTP Client for fetching files from SFTP server (SSH File Transfer Protocol)"""
+    
     def __init__(self, host, port, username=None, password=None):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
-        self.ftp = None
+        self.sftp = None
 
     def connect(self):
-        """Establish FTP connection"""
+        """Establish SFTP connection"""
         try:
-            logger.info(f"Attempting FTP connection to {self.host}:{self.port}")
-            self.ftp = FTP()
-            self.ftp.set_debuglevel(2)  # Enable debug output
+            logger.info(f"Attempting SFTP connection to {self.host}:{self.port}")
+            logger.info(f"Username: {self.username if self.username else 'Anonymous'}")
+            
+            # SFTP connection options
+            cnopts = pysftp.CnOpts()
+            cnopts.hostkeys = None  # Ignore host key checking (use with caution in production)
             
             logger.info(f"Connecting to {self.host}:{self.port} with timeout 60 seconds")
-            self.ftp.connect(self.host, self.port, timeout=60)
+            self.sftp = pysftp.Connection(
+                self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                cnopts=cnopts,
+                default_path='/'
+            )
             
-            logger.info(f"Connected to FTP server {self.host}:{self.port}")
-            logger.info(f"FTP response: {self.ftp.welcome}")
+            logger.info(f"✓ SFTP connection established to {self.host}:{self.port}")
+            logger.info(f"✓ Successfully authenticated as {self.username}")
             
-            if self.username and self.password:
-                logger.info(f"Logging in as {self.username}")
-                response = self.ftp.login(self.username, self.password)
-                logger.info(f"Login response: {response}")
-            else:
-                logger.info("Attempting anonymous login")
-                response = self.ftp.login()
-                logger.info(f"Anonymous login response: {response}")
-                
-            logger.info(f"Successfully authenticated to FTP server {self.host}:{self.port}")
         except Exception as e:
-            logger.error(f"FTP connection failed: {e}")
-            logger.error(f"Host: {self.host}, Port: {self.port}, Username: {self.username}")
+            logger.error(f"✗ SFTP connection failed: {e}")
+            logger.error(f"  Host: {self.host}, Port: {self.port}, Username: {self.username}")
             raise
 
     def disconnect(self):
-        """Close FTP connection"""
+        """Close SFTP connection"""
         try:
-            if self.ftp:
-                self.ftp.quit()
-                logger.info("Disconnected from FTP server")
+            if self.sftp:
+                self.sftp.close()
+                logger.info("✓ Disconnected from SFTP server")
         except Exception as e:
-            logger.error(f"FTP disconnection error: {e}")
+            logger.error(f"SFTP disconnection error: {e}")
 
     def fetch_file(self, remote_dir, filename, local_path):
-        """Fetch a file from FTP server"""
+        """Fetch a file from SFTP server"""
         try:
-            self.ftp.cwd(remote_dir)
+            self.sftp.cwd(remote_dir)
             logger.info(f"Changed to remote directory: {remote_dir}")
 
-            with open(local_path, 'wb') as f:
-                self.ftp.retrbinary(f'RETR {filename}', f.write)
-            logger.info(f"Downloaded {filename} to {local_path}")
+            remote_file_path = f"{remote_dir}/{filename}"
+            logger.info(f"Downloading {filename} from {remote_file_path}")
+            
+            self.sftp.get(remote_file_path, local_path)
+            logger.info(f"✓ Downloaded {filename} to {local_path}")
+            
         except Exception as e:
-            logger.error(f"File download failed: {e}")
+            logger.error(f"✗ File download failed: {e}")
             raise
 
     def fetch_latest_settlement_report(self, remote_dir, local_path):
         """
-        Fetch the latest auto settlement report file from FTP.
+        Fetch the latest auto settlement report file from SFTP.
         Expects filename format: auto_settle_failure_report_YYYYMMDD.xlsx
         """
         try:
-            self.ftp.cwd(remote_dir)
-            logger.info(f"Listing files in {remote_dir}")
+            self.sftp.cwd(remote_dir)
+            logger.info(f"Changed to directory: {remote_dir}")
+            logger.info(f"Listing files in {remote_dir}...")
 
-            file_list = self.ftp.nlst()
+            file_list = self.sftp.listdir()
+            logger.info(f"Found {len(file_list)} items in directory")
             
             # Filter for settlement report files
             settlement_files = [
@@ -81,18 +88,22 @@ class FTPClient:
             ]
 
             if not settlement_files:
-                raise Exception("No settlement report files found in FTP server")
+                logger.error(f"No settlement report files found in {remote_dir}")
+                logger.error(f"Available files: {file_list[:10]}")
+                raise Exception("No settlement report files found in SFTP server")
 
             # Get the latest file (sorted by date in filename)
             latest_file = sorted(settlement_files)[-1]
-            logger.info(f"Found settlement report file: {latest_file}")
+            logger.info(f"✓ Found latest settlement report: {latest_file}")
 
-            with open(local_path, 'wb') as f:
-                self.ftp.retrbinary(f'RETR {latest_file}', f.write)
+            remote_file_path = f"{remote_dir}/{latest_file}"
+            logger.info(f"Downloading {latest_file} to {local_path}")
             
-            logger.info(f"Downloaded {latest_file} to {local_path}")
+            self.sftp.get(remote_file_path, local_path)
+            
+            logger.info(f"✓ Successfully downloaded {latest_file} to {local_path}")
             return latest_file
 
         except Exception as e:
-            logger.error(f"Failed to fetch settlement report: {e}")
+            logger.error(f"✗ Failed to fetch settlement report: {e}")
             raise

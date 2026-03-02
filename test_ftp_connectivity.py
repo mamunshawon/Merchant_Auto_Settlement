@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-FTP Connectivity Diagnostic Script
-Tests FTP connection with detailed debugging output
+SFTP Connectivity Diagnostic Script
+Tests SFTP connection with detailed debugging output
 """
 
 import socket
-from ftplib import FTP
+import pysftp
 from config.settings import FTP_HOST, FTP_PORT, FTP_USERNAME, FTP_PASSWORD, FTP_REMOTE_DIR
 from utils.logger import get_logger
 
-logger = get_logger("FTP_DIAGNOSTIC")
+logger = get_logger("SFTP_DIAGNOSTIC")
 
 
 def test_network_connectivity():
-    """Test basic network connectivity to FTP server"""
+    """Test basic network connectivity to SFTP server"""
     logger.info("=" * 60)
     logger.info("STEP 1: Testing Network Connectivity")
     logger.info("=" * 60)
@@ -37,102 +37,109 @@ def test_network_connectivity():
         return False
 
 
-def test_ftp_connection():
-    """Test FTP connection without login"""
+def test_sftp_connection():
+    """Test SFTP connection without login"""
     logger.info("\n" + "=" * 60)
-    logger.info("STEP 2: Testing FTP Connection (without login)")
+    logger.info("STEP 2: Testing SFTP Connection (without login)")
     logger.info("=" * 60)
     
     try:
-        logger.info(f"Creating FTP connection object to {FTP_HOST}:{FTP_PORT}")
-        ftp = FTP()
-        ftp.set_debuglevel(2)
+        logger.info(f"Creating SFTP connection object to {FTP_HOST}:{FTP_PORT}")
+        cnopts = pysftp.CnOpts()
+        cnopts.hostkeys = None
         
         logger.info("Attempting to connect...")
-        ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
-        logger.info(f"✓ FTP connection: SUCCESS")
-        logger.info(f"  Server welcome message: {ftp.welcome}")
+        sftp = pysftp.Connection(
+            FTP_HOST,
+            port=FTP_PORT,
+            username=FTP_USERNAME,
+            password=FTP_PASSWORD,
+            cnopts=cnopts
+        )
+        logger.info(f"✓ SFTP connection: SUCCESS")
+        logger.info(f"  Remote server: {FTP_HOST}:{FTP_PORT}")
         
-        ftp.quit()
+        sftp.close()
         return True
     except Exception as e:
-        logger.error(f"✗ FTP connection failed: {e}")
+        logger.error(f"✗ SFTP connection failed: {e}")
         return False
 
 
-def test_ftp_login():
-    """Test FTP connection with login"""
+def test_sftp_login():
+    """Test SFTP connection with login"""
     logger.info("\n" + "=" * 60)
-    logger.info("STEP 3: Testing FTP Login")
+    logger.info("STEP 3: Testing SFTP Login")
     logger.info("=" * 60)
     
     try:
-        logger.info(f"Creating FTP connection to {FTP_HOST}:{FTP_PORT}")
-        ftp = FTP()
-        ftp.set_debuglevel(2)
+        logger.info(f"Creating SFTP connection to {FTP_HOST}:{FTP_PORT}")
+        cnopts = pysftp.CnOpts()
+        cnopts.hostkeys = None
         
-        logger.info(f"Connecting with timeout 60 seconds...")
-        ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
-        logger.info(f"✓ Connection established")
-        logger.info(f"  Welcome: {ftp.welcome}")
+        logger.info(f"Connecting with username: {FTP_USERNAME}")
+        sftp = pysftp.Connection(
+            FTP_HOST,
+            port=FTP_PORT,
+            username=FTP_USERNAME,
+            password=FTP_PASSWORD,
+            cnopts=cnopts
+        )
+        logger.info(f"✓ SFTP login: SUCCESS")
+        logger.info(f"  Authenticated as: {FTP_USERNAME}")
+        logger.info(f"  Connected to: {FTP_HOST}:{FTP_PORT}")
         
-        if FTP_USERNAME and FTP_PASSWORD:
-            logger.info(f"Attempting login as: {FTP_USERNAME}")
-            response = ftp.login(FTP_USERNAME, FTP_PASSWORD)
-            logger.info(f"✓ FTP login: SUCCESS")
-            logger.info(f"  Login response: {response}")
-        else:
-            logger.info("No credentials provided, attempting anonymous login...")
-            response = ftp.login()
-            logger.info(f"✓ Anonymous login: SUCCESS")
-            logger.info(f"  Login response: {response}")
-        
-        ftp.quit()
+        sftp.close()
         return True
     except Exception as e:
-        logger.error(f"✗ FTP login failed: {e}")
+        logger.error(f"✗ SFTP login failed: {e}")
         return False
 
 
-def test_ftp_directory():
-    """Test FTP directory access"""
+def test_sftp_directory():
+    """Test SFTP directory access"""
     logger.info("\n" + "=" * 60)
-    logger.info("STEP 4: Testing FTP Directory Access")
+    logger.info("STEP 4: Testing SFTP Directory Access")
     logger.info("=" * 60)
     
     try:
-        ftp = FTP()
-        ftp.set_debuglevel(2)
-        ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+        cnopts = pysftp.CnOpts()
+        cnopts.hostkeys = None
         
-        if FTP_USERNAME and FTP_PASSWORD:
-            ftp.login(FTP_USERNAME, FTP_PASSWORD)
-        else:
-            ftp.login()
+        sftp = pysftp.Connection(
+            FTP_HOST,
+            port=FTP_PORT,
+            username=FTP_USERNAME,
+            password=FTP_PASSWORD,
+            cnopts=cnopts
+        )
         
-        logger.info(f"Attempting to change to directory: {FTP_REMOTE_DIR}")
-        ftp.cwd(FTP_REMOTE_DIR)
+        logger.info(f"Attempting to access directory: {FTP_REMOTE_DIR}")
+        sftp.cwd(FTP_REMOTE_DIR)
         logger.info(f"✓ Directory access: SUCCESS")
         
         logger.info(f"Listing files in {FTP_REMOTE_DIR}...")
-        file_list = ftp.nlst()
+        file_list = sftp.listdir()
         logger.info(f"✓ Found {len(file_list)} files/directories:")
-        for item in file_list[:10]:  # Show first 10
+        
+        for item in file_list[:20]:  # Show first 20
             logger.info(f"  - {item}")
         
-        if len(file_list) > 10:
-            logger.info(f"  ... and {len(file_list) - 10} more")
+        if len(file_list) > 20:
+            logger.info(f"  ... and {len(file_list) - 20} more")
         
         # Look for settlement report files
-        settlement_files = [f for f in file_list if "auto_settle" in f.lower()]
+        settlement_files = [f for f in file_list if "auto_settle" in f.lower() and f.endswith('.xlsx')]
         if settlement_files:
             logger.info(f"\n✓ Found settlement report files:")
-            for f in settlement_files:
+            for f in sorted(settlement_files):
                 logger.info(f"  - {f}")
+            latest = sorted(settlement_files)[-1]
+            logger.info(f"\n  Latest file: {latest}")
         else:
             logger.warning(f"⚠ No settlement report files found (expected: auto_settle_*.xlsx)")
         
-        ftp.quit()
+        sftp.close()
         return True
     except Exception as e:
         logger.error(f"✗ Directory access failed: {e}")
@@ -141,18 +148,18 @@ def test_ftp_directory():
 
 def main():
     logger.info("\n" + "=" * 60)
-    logger.info("FTP CONNECTIVITY DIAGNOSTIC")
+    logger.info("SFTP CONNECTIVITY DIAGNOSTIC")
     logger.info("=" * 60)
-    logger.info(f"FTP Server: {FTP_HOST}:{FTP_PORT}")
-    logger.info(f"FTP Username: {FTP_USERNAME if FTP_USERNAME else 'Anonymous'}")
-    logger.info(f"FTP Directory: {FTP_REMOTE_DIR}")
+    logger.info(f"SFTP Server: {FTP_HOST}:{FTP_PORT}")
+    logger.info(f"SFTP Username: {FTP_USERNAME if FTP_USERNAME else 'Anonymous'}")
+    logger.info(f"SFTP Directory: {FTP_REMOTE_DIR}")
     
     # Run tests
     results = {}
     results["Network"] = test_network_connectivity()
-    results["FTP Connection"] = test_ftp_connection()
-    results["FTP Login"] = test_ftp_login()
-    results["FTP Directory"] = test_ftp_directory()
+    results["SFTP Connection"] = test_sftp_connection()
+    results["SFTP Login"] = test_sftp_login()
+    results["SFTP Directory"] = test_sftp_directory()
     
     # Summary
     logger.info("\n" + "=" * 60)
@@ -165,7 +172,7 @@ def main():
     
     all_passed = all(results.values())
     if all_passed:
-        logger.info("\n✓ All tests passed! FTP is properly configured.")
+        logger.info("\n✓ All tests passed! SFTP is properly configured.")
     else:
         logger.error("\n✗ Some tests failed. Check the output above for details.")
     
