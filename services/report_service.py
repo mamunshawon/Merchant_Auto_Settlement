@@ -28,3 +28,4 @@ class ReportService:
         df = pd.DataFrame(self.rows)
         df.to_excel(filename, index=False)
         logger.info(f"Report saved: {filename}")
+        return filename

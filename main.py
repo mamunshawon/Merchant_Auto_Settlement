@@ -5,9 +5,21 @@ from services.ftp_client import FTPClient
 from services.data_processor import DataProcessor
 from services.excel_reader import ExcelReader
 from services.report_service import ReportService
-from config.settings import FTP_HOST, FTP_PORT, FTP_USERNAME, FTP_PASSWORD, FTP_REMOTE_DIR
+from services.email_service import EmailService
+from config.settings import (
+    FTP_HOST,
+    FTP_PORT,
+    FTP_USERNAME,
+    FTP_PASSWORD,
+    FTP_REMOTE_DIR,
+    EMAIL_SENDER,
+    EMAIL_RECEIVER,
+    SMTP_SERVER,
+    SMTP_PORT,
+)
 from utils.logger import get_logger
 import pandas as pd
+from datetime import datetime
 
 logger = get_logger("MAIN")
 
@@ -116,8 +128,20 @@ def main():
                     message,
                 )
 
-        report_service.save()
+        report_file = report_service.save()
         logger.info("All merchants processed successfully")
+
+        email_service = EmailService(
+            smtp_server=SMTP_SERVER,
+            smtp_port=SMTP_PORT,
+            sender=EMAIL_SENDER,
+            receiver=EMAIL_RECEIVER,
+        )
+        email_service.send_report(
+            report_file,
+            subject=f"Auto Settlement Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            body="Please find the auto settlement report attached.",
+        )
         
     except Exception as e:
         logger.error(f"Processing failed: {e}")
