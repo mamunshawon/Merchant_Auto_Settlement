@@ -28,8 +28,9 @@ EXCEL_FILE = "input.xlsx"
 
 def process_merchant(auto_service, merchant):
     merchant_id = merchant["merchantId"]
-    new_hour = merchant["hour"]
     new_minute = merchant["minute"]
+    old_hour = None
+    old_minute = None
 
     try:
         logger.info(f"Processing {merchant_id}")
@@ -41,7 +42,7 @@ def process_merchant(auto_service, merchant):
         auto_service.update_config(
             merchant_id,
             config,
-            new_hour,
+            old_hour,
             new_minute
         )
 
@@ -49,7 +50,7 @@ def process_merchant(auto_service, merchant):
             merchant_id,
             old_hour,
             old_minute,
-            new_hour,
+            old_hour,
             new_minute,
             "SUCCESS",
             "Updated successfully",
@@ -59,9 +60,9 @@ def process_merchant(auto_service, merchant):
         logger.error(f"Failed for {merchant_id}: {e}")
         return (
             merchant_id,
-            None,
-            None,
-            new_hour,
+            old_hour,
+            old_minute,
+            old_hour,
             new_minute,
             "FAILED",
             str(e),
@@ -131,6 +132,11 @@ def main():
         report_file = report_service.save()
         logger.info("All merchants processed successfully")
 
+        total_merchants = len(merchant_list)
+        success_count = sum(
+            1 for row in report_service.rows if row.get("status") == "SUCCESS"
+        )
+
         email_service = EmailService(
             smtp_server=SMTP_SERVER,
             smtp_port=SMTP_PORT,
@@ -140,7 +146,11 @@ def main():
         email_service.send_report(
             report_file,
             subject=f"Auto Settlement Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            body="Please find the auto settlement report attached.",
+            body=(
+                f"Merchant Auto Settlement Refresh count: "
+                f"{success_count}/{total_merchants}\n\n"
+                f"Please find the auto settlement report attached."
+            ),
         )
         
     except Exception as e:

@@ -10,9 +10,9 @@ class DataProcessor:
     @staticmethod
     def adjust_minute(minute):
         """
-        Adjust minute by adding 15 minutes.
-        Logic: 0→15, 15→30, 30→45, 45→0 (with hour increment)
-        Returns: (new_hour_offset, new_minute)
+        Adjust minute by adding 15 minutes, without changing the hour.
+        Logic: 0→15, 15→30, 30→45, 45→0
+        Returns: (hour_offset, new_minute) where hour_offset is always 0
         """
         minute = int(minute)
         
@@ -23,7 +23,7 @@ class DataProcessor:
         elif minute == 30:
             return 0, 45
         elif minute == 45:
-            return 1, 0  # Increment hour by 1
+            return 0, 0
         else:
             logger.warning(f"Unexpected minute value: {minute}. Valid values are 0, 15, 30, 45")
             # Find closest valid value and adjust
@@ -35,7 +35,7 @@ class DataProcessor:
     @staticmethod
     def process_merchant_data(df):
         """
-        Process merchant data: adjust hours and minutes.
+        Process merchant data: adjust minutes only (hour unchanged).
         
         Expected columns: MERCHANT_ID, HOUR, MINUTE
         Returns processed dataframe with adjusted hours and minutes
