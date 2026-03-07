@@ -26,6 +26,6 @@ HEADLESS = True
 # Email Configuration
 EMAIL_SENDER = os.getenv("EMAIL_SENDER", "notification@nagad.com.bd")
 # Supports space- or comma-separated list
-EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", "mno.strategy@nagad.com.bd toc@nagad.com.bd")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", "toc@nagad.com.bd")
 SMTP_SERVER = os.getenv("SMTP_SERVER", "10.210.10.175")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "25"))
