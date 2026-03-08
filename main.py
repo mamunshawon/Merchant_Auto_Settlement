@@ -24,6 +24,7 @@ from datetime import datetime
 logger = get_logger("MAIN")
 
 EXCEL_FILE = "input.xlsx"
+QR_EXCEL_FILE = "input_qr.xlsx"
 
 
 def process_merchant(auto_service, merchant):
@@ -78,6 +79,11 @@ def main():
         ftp_client = FTPClient(FTP_HOST, FTP_PORT, FTP_USERNAME, FTP_PASSWORD)
         ftp_client.connect()
         ftp_client.fetch_latest_settlement_report(FTP_REMOTE_DIR, EXCEL_FILE)
+        try:
+            ftp_client.fetch_latest_qr_settlement_report(FTP_REMOTE_DIR, QR_EXCEL_FILE)
+            logger.info(f"Successfully fetched QR file from FTP: {QR_EXCEL_FILE}")
+        except Exception as e:
+            logger.warning(f"QR report fetch skipped/failed: {e}")
         logger.info(f"Successfully fetched file from FTP: {EXCEL_FILE}")
         
     except Exception as e:
@@ -96,19 +102,34 @@ def main():
         # Process merchant data: adjust hours and minutes
         merchant_list = DataProcessor.process_merchant_data(df)
         logger.info(f"Processed {len(merchant_list)} merchants from FTP file")
+
+        qr_merchant_list = []
+        try:
+            logger.info(f"Reading and processing QR data from {QR_EXCEL_FILE}...")
+            qr_df = pd.read_excel(QR_EXCEL_FILE)
+            qr_merchant_list = DataProcessor.process_merchant_data(qr_df)
+            logger.info(f"Processed {len(qr_merchant_list)} QR merchants from FTP file")
+        except Exception as e:
+            logger.warning(f"QR processing skipped/failed: {e}")
         
         # Step 3: Continue with existing auto-settlement process
         session_manager = SessionManager()
         auto_service = AutoSettlementService(session_manager)
         report_service = ReportService()
+        qr_report_service = ReportService()
+        qr_merchant_ids = {m.get("merchantId") for m in qr_merchant_list}
 
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [
                 executor.submit(process_merchant, auto_service, merchant)
                 for merchant in merchant_list
             ]
+            qr_futures = [
+                executor.submit(process_merchant, auto_service, merchant)
+                for merchant in qr_merchant_list
+            ]
 
-            for future in as_completed(futures):
+            for future in as_completed(futures + qr_futures):
                 (
                     merchant_id,
                     old_hour,
@@ -119,22 +140,40 @@ def main():
                     message,
                 ) = future.result()
 
-                report_service.add_record(
-                    merchant_id,
-                    old_hour,
-                    old_minute,
-                    new_hour,
-                    new_minute,
-                    status,
-                    message,
-                )
+                # Put record into normal vs QR report based on the input list membership.
+                # (merchant_list/qr_merchant_list contain dicts, so use merchant_id lookup.)
+                if merchant_id in qr_merchant_ids:
+                    qr_report_service.add_record(
+                        merchant_id,
+                        old_hour,
+                        old_minute,
+                        new_hour,
+                        new_minute,
+                        status,
+                        message,
+                    )
+                else:
+                    report_service.add_record(
+                        merchant_id,
+                        old_hour,
+                        old_minute,
+                        new_hour,
+                        new_minute,
+                        status,
+                        message,
+                    )
 
         report_file = report_service.save()
+        qr_report_file = qr_report_service.save() if qr_merchant_list else None
         logger.info("All merchants processed successfully")
 
         total_merchants = len(merchant_list)
         success_count = sum(
             1 for row in report_service.rows if row.get("status") == "SUCCESS"
+        )
+        total_qr_merchants = len(qr_merchant_list)
+        qr_success_count = sum(
+            1 for row in qr_report_service.rows if row.get("status") == "SUCCESS"
         )
 
         email_service = EmailService(
@@ -143,12 +182,13 @@ def main():
             sender=EMAIL_SENDER,
             receiver=EMAIL_RECEIVER,
         )
-        email_service.send_report(
-            report_file,
+        attachments = [report_file] + ([qr_report_file] if qr_report_file else [])
+        email_service.send_reports(
+            attachments,
             subject=f"Auto Settlement Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             body=(
-                f"Merchant Auto Settlement Refresh count: "
-                f"{success_count}/{total_merchants}\n\n"
+                f"Merchant Auto Settlement Refresh count: {success_count}/{total_merchants}\n"
+                f"QR Merchant Auto Settlement Refresh count: {qr_success_count}/{total_qr_merchants}\n\n"
                 f"Please find the auto settlement report attached."
             ),
         )

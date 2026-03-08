@@ -107,3 +107,40 @@ class FTPClient:
         except Exception as e:
             logger.error(f"✗ Failed to fetch settlement report: {e}")
             raise
+
+    def fetch_latest_qr_settlement_report(self, remote_dir, local_path):
+        """
+        Fetch the latest QR auto settlement report file from SFTP.
+        Expects filename format: MC_AUTO_SETTLEMENT_FAIL_QR_YYYYMMDD.xlsx
+        """
+        try:
+            self.sftp.cwd(remote_dir)
+            logger.info(f"Changed to directory: {remote_dir}")
+            logger.info(f"Listing files in {remote_dir}...")
+
+            file_list = self.sftp.listdir()
+            logger.info(f"Found {len(file_list)} items in directory")
+
+            qr_files = [
+                f for f in file_list
+                if f.startswith("MC_AUTO_SETTLEMENT_FAIL_QR_") and f.endswith(".xlsx")
+            ]
+
+            if not qr_files:
+                raise FileNotFoundError(
+                    "No QR settlement report files found in SFTP server"
+                )
+
+            latest_file = sorted(qr_files)[-1]
+            logger.info(f"✓ Found latest QR settlement report: {latest_file}")
+
+            remote_file_path = f"{remote_dir}/{latest_file}"
+            logger.info(f"Downloading {latest_file} to {local_path}")
+
+            self.sftp.get(remote_file_path, local_path)
+            logger.info(f"✓ Successfully downloaded {latest_file} to {local_path}")
+            return latest_file
+
+        except Exception as e:
+            logger.error(f"✗ Failed to fetch QR settlement report: {e}")
+            raise

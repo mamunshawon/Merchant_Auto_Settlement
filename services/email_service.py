@@ -31,6 +31,9 @@ class EmailService:
         self.receiver_raw = receiver
 
     def send_report(self, report_path: str, subject: str, body: str) -> None:
+        self.send_reports([report_path], subject=subject, body=body)
+
+    def send_reports(self, report_paths: list[str], subject: str, body: str) -> None:
         recipients = _parse_recipients(self.receiver_raw)
         if not recipients:
             raise ValueError("No email recipients configured (EMAIL_RECEIVER is empty)")
@@ -41,22 +44,23 @@ class EmailService:
         msg["Subject"] = subject
         msg.set_content(body)
 
-        report_path = os.path.abspath(report_path)
-        if not os.path.exists(report_path):
-            raise FileNotFoundError(f"Report file not found: {report_path}")
+        for report_path in report_paths:
+            report_path = os.path.abspath(report_path)
+            if not os.path.exists(report_path):
+                raise FileNotFoundError(f"Report file not found: {report_path}")
 
-        ctype, encoding = mimetypes.guess_type(report_path)
-        if ctype is None or encoding is not None:
-            ctype = "application/octet-stream"
-        maintype, subtype = ctype.split("/", 1)
+            ctype, encoding = mimetypes.guess_type(report_path)
+            if ctype is None or encoding is not None:
+                ctype = "application/octet-stream"
+            maintype, subtype = ctype.split("/", 1)
 
-        with open(report_path, "rb") as f:
-            msg.add_attachment(
-                f.read(),
-                maintype=maintype,
-                subtype=subtype,
-                filename=os.path.basename(report_path),
-            )
+            with open(report_path, "rb") as f:
+                msg.add_attachment(
+                    f.read(),
+                    maintype=maintype,
+                    subtype=subtype,
+                    filename=os.path.basename(report_path),
+                )
 
         logger.info(
             f"Sending report email via {self.smtp_server}:{self.smtp_port} to {recipients}"
